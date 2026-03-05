@@ -75,8 +75,8 @@ in
           "FLASK_ENV=production"
         ] ++ (lib.mapAttrsToList (name: value: "${name}=${value}") cfg.settings);
 
-        ExecStartPre = lib.singleton (
-          ''
+        ExecStartPre = [
+          "/bin/sh" "-c" ''
             set -e
             cd ${cfg.dataDir}
             if [ ! -d "venv" ]; then
@@ -89,7 +89,7 @@ in
             echo "Running database migrations..."
             python -m flask db upgrade
           ''
-        );
+        ];
 
         ExecStart = "${cfg.dataDir}/venv/bin/gunicorn --config ${cfg.package}/lib/wizarr/gunicorn.conf.py --bind ${cfg.host}:${toString cfg.port} --umask 007 run:app";
       };

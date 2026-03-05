@@ -30,7 +30,7 @@ in
     dataDir = lib.mkOption {
       type = lib.types.path;
       default = "/var/lib/wizarr";
-      description = "Directory where Wizarr stores its data.";
+      description = "Directory where Wizarr stores its data and database.";
     };
 
     openFirewall = lib.mkOption {
@@ -47,7 +47,7 @@ in
   };
 
   config = lib.mkIf cfg.enable {
-    environment.systemPackages = [ cfg.package ];
+    environment.systemPackages = [ cfg.package pkgs.uv ];
 
     systemd.services.wizarr = {
       description = "Wizarr - Media Server User Invitation System";
@@ -67,13 +67,31 @@ in
         ProtectSystem = "strict";
         ProtectHome = true;
         NoNewPrivileges = true;
-        ExecStart = "${cfg.package}/bin/wizarr";
+        WorkingDirectory = cfg.dataDir;
 
         Environment = [
           "PUID=1000"
           "PGID=1000"
           "FLASK_ENV=production"
         ] ++ (lib.mapAttrsToList (name: value: "${name}=${value}") cfg.settings);
+
+        ExecStartPre = lib.singleton (
+          ''
+            set -e
+            cd ${cfg.dataDir}
+            if [ ! -d "venv" ]; then
+              echo "Creating Wizarr virtual environment..."
+              uv venv venv
+            fi
+            echo "Installing dependencies..."
+            . venv/bin/activate
+            uv sync --frozen --no-dev
+            echo "Running database migrations..."
+            python -m flask db upgrade
+          ''
+        );
+
+        ExecStart = "${cfg.dataDir}/venv/bin/gunicorn --config ${cfg.package}/lib/wizarr/gunicorn.conf.py --bind ${cfg.host}:${toString cfg.port} --umask 007 run:app";
       };
 
       environment = {

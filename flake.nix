@@ -19,6 +19,7 @@
           
           buildInputs = with pkgs; [
             python3
+            uv
           ];
           
           installPhase = ''
@@ -26,17 +27,29 @@
             cp -r . $out/lib/wizarr
             
             mkdir -p $out/bin
+            
+            # Main startup script
             cat > $out/bin/wizarr <<'EOF'
             #!/bin/bash
-            # Wizarr requires dependencies to be installed via uv first:
-            #   cd $out/lib/wizarr
-            #   uv sync
-            #   uv run gunicorn --config gunicorn.conf.py --bind "0.0.0.0:$PORT" run:app
-            echo "Wizarr requires dependencies to be installed first!"
-            echo "Run: cd $out/lib/wizarr && uv sync"
-            echo "Then run: cd $out/lib/wizarr && uv run gunicorn --config gunicorn.conf.py --bind '0.0.0.0:5690' run:app"
+            export FLASK_ENV=production
+            SCRIPT_DIR="$(dirname "$0")"
+            cd "$SCRIPT_DIR/../lib/wizarr"
+            exec gunicorn \
+              --config gunicorn.conf.py \
+              --bind "0.0.0.0:$PORT" \
+              --umask "007" \
+              run:app
             EOF
             chmod +x $out/bin/wizarr
+            
+            # Migration script
+            cat > $out/bin/wizarr-migrate <<'EOF'
+            #!/bin/bash
+            SCRIPT_DIR="$(dirname "$0")"
+            cd "$SCRIPT_DIR/../lib/wizarr"
+            exec python -m flask db upgrade
+            EOF
+            chmod +x $out/bin/wizarr-migrate
           '';
         };
       in
@@ -60,8 +73,12 @@
           
           shellHook = ''
             echo "Wizarr development environment"
-            echo "Run 'uv sync' to install dependencies"
-            echo "Run 'uv run gunicorn --config gunicorn.conf.py --bind 0.0.0.0:5690 run:app' to start"
+            echo "=========================================="
+            echo "1. Install dependencies: uv sync"
+            echo "2. Run database migrations: uv run flask db upgrade"
+            echo "3. Start server: uv run gunicorn --config gunicorn.conf.py --bind 0.0.0.0:5690 run:app"
+            echo ""
+            echo "Note: Wizarr uses SQLite by default (wizarr.db)"
           '';
         };
       }

@@ -68,10 +68,15 @@ def create_app(config_object=DevelopmentConfig):
     # Step 5: Setup context processors and filters
     if show_startup:
         logger.step("Configuring request processing", "⚙️")
-    from .context_processors import inject_plus_features, inject_server_name
+    from .context_processors import (
+        inject_app_version,
+        inject_plus_features,
+        inject_server_name,
+    )
 
     app.context_processor(inject_server_name)
     app.context_processor(inject_plus_features)
+    app.context_processor(inject_app_version)
     register_error_handlers(app)
 
     # Register custom Jinja filters
@@ -150,10 +155,10 @@ def create_app(config_object=DevelopmentConfig):
         try:
             import plus
 
-            plus.enable_plus_features()
+            plus.enable_plus_features()  # type: ignore
 
             with app.app_context():
-                plus.initialize_plus_features(app)
+                plus.initialize_plus_features(app)  # type: ignore
 
             if show_startup:
                 logger.success("Plus features enabled")
